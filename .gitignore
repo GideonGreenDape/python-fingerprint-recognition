@@ -1,0 +1,23 @@
+# Node modules
+node_modules/
+
+# Environment variables file
+.env
+
+# Logs
+logs
+*.log
+
+# Dependency directories
+package-lock.json
+yarn-error.log
+
+# Misc
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Optional: Ignore compiled files and folders
+dist/
+build/
