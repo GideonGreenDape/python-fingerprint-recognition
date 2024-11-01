@@ -58,31 +58,39 @@ Created on Tue Apr 19 12:14:49 2016
 
 
 import numpy as np
-#import math
-#import scipy.ndimage
 from .frequest import frequest
 
-def ridge_freq(im, mask, orient, blksze, windsze,minWaveLength, maxWaveLength):
-    rows,cols = im.shape;
-    freq = np.zeros((rows,cols));
-    
-    for r in range(0,rows-blksze,blksze):
-        for c in range(0,cols-blksze,blksze):
-            blkim = im[r:r+blksze][:,c:c+blksze];
-            blkor = orient[r:r+blksze][:,c:c+blksze];
+def ridge_freq(im, mask, orient, blksze, windsze, minWaveLength, maxWaveLength):
+    rows, cols = im.shape
+    freq = np.zeros((rows, cols))
+
+    # Loop over blocks of the image
+    for r in range(0, rows - blksze, blksze):
+        for c in range(0, cols - blksze, blksze):
+            # Corrected 2D slicing
+            blkim = im[r:r + blksze, c:c + blksze]
+            blkor = orient[r:r + blksze, c:c + blksze]
             
-            
-            freq[r:r+blksze][:,c:c+blksze] = frequest(blkim,blkor,windsze,minWaveLength,maxWaveLength);
+            # Compute the frequency for the block
+            freq_block = frequest(blkim, blkor, windsze, minWaveLength, maxWaveLength)
+            freq[r:r + blksze, c:c + blksze] = freq_block
+
+    # Apply mask to frequency
+    freq = freq * mask
+
+    # Reshape frequency matrix into a 1D array and get non-zero elements
+    freq_1d = freq.flatten()  # Flatten the matrix to 1D array
+    non_zero_indices = np.where(freq_1d > 0)[0]  # Find indices of non-zero elements
     
-    freq = freq*mask;
-    freq_1d = np.reshape(freq,(1,rows*cols));
-    ind = np.where(freq_1d>0);
+    # Check if there are any valid frequencies
+    if len(non_zero_indices) == 0:
+        return freq, 0  # Return 0 mean frequency if no valid frequencies found
+
+    # Extract non-zero frequency elements
+    non_zero_elems_in_freq = freq_1d[non_zero_indices]
     
-    ind = np.array(ind);
-    ind = ind[1,:];    
-    
-    non_zero_elems_in_freq = freq_1d[0][ind];    
-    
-    meanfreq = np.mean(non_zero_elems_in_freq);
-    medianfreq = np.median(non_zero_elems_in_freq);         # does not work properly
-    return(freq,meanfreq)
+    # Calculate mean and median frequencies
+    meanfreq = np.mean(non_zero_elems_in_freq)
+    medianfreq = np.median(non_zero_elems_in_freq)  # This should work as long as there are valid non-zero elements
+
+    return freq, meanfreq
