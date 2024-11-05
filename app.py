@@ -109,7 +109,7 @@ if __name__ == '__main__':
                         best_score = score
                         best_match = idx
                         # Adjust match percentage to be more meaningful
-                    match_percentage = max(0, min((1 - best_score / 40), 1)) * 100  # Scale match percentage
+                    match_percentage = max(0, min((1 - best_score / 20), 1)) * 100  # Scale match percentage
 
             except Exception as e:
                 print(f"Error processing fingerprint at {image_path}: {str(e)}", file=sys.stderr)

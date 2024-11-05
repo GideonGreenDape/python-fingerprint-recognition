@@ -175,8 +175,11 @@ app.post('/validatefingerprint', async (req, res) => {
                 const result = JSON.parse(dataFromPython);
                 console.log(result);
                 
-                // Handle the case when no match is found
-                if (result.matchIndex === -1) {
+                // Define a threshold for match percentage 
+                const matchThreshold = 10;
+
+                // Handle the case when no match is found or the match percentage is below the threshold
+                if (result.matchIndex === -1 || result.matchPercentage < matchThreshold) {
                     return res.status(404).json({
                         message: 'No fingerprint match found.',
                     });
@@ -212,6 +215,7 @@ app.post('/validatefingerprint', async (req, res) => {
         await client.close();
     }
 });
+
 
 
 
