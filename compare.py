@@ -74,9 +74,13 @@ def compare_fingerprints(des1, des2):
 
 if __name__ == '__main__':
     uploaded_image_path = sys.argv[1]
-    stored_image_paths = json.loads(sys.argv[2])
+    descriptors_file_path = sys.argv[2]
 
     try:
+        # Load stored descriptors from file
+        with open(descriptors_file_path, 'r') as f:
+            stored_descriptors = json.load(f)
+
         # Load and get descriptors for the uploaded fingerprint image
         uploaded_fingerprint = cv2.imread(uploaded_image_path, cv2.IMREAD_GRAYSCALE)
         if uploaded_fingerprint is None:
@@ -91,18 +95,15 @@ if __name__ == '__main__':
         best_score = float('inf')
         match_percentage = 0
 
-        # Loop through each stored fingerprint image
-        for idx, image_path in enumerate(stored_image_paths):
+        # Loop through each stored fingerprint descriptor
+        for idx, stored_des in enumerate(stored_descriptors):
             try:
-                stored_fingerprint = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-                if stored_fingerprint is None:
-                    raise ValueError(f"Could not load image from path: {image_path}")
-                
-                kp2, des2 = get_descriptors(stored_fingerprint)
+                # Convert stored descriptors from list to numpy array (if necessary)
+                stored_des = np.array(stored_des, dtype=np.uint8)
 
                 # Compare descriptors if both are valid
-                if des2 is not None:
-                    score, matches = compare_fingerprints(des1, des2)
+                if stored_des is not None:
+                    score, matches = compare_fingerprints(des1, stored_des)
                     
                     # Determine best match based on score (lower score is better)
                     if score < best_score:
@@ -112,7 +113,7 @@ if __name__ == '__main__':
                     match_percentage = max(0, min((1 - best_score / 40), 1)) * 100  # Scale match percentage
 
             except Exception as e:
-                print(f"Error processing fingerprint at {image_path}: {str(e)}", file=sys.stderr)
+                print(f"Error processing stored descriptors at index {idx}: {str(e)}", file=sys.stderr)
 
         # Result indicating best match index and match percentage
         result = {
