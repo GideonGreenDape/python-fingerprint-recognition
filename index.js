@@ -67,65 +67,68 @@ app.post('/upload', upload, async (req, res) => {
         // Write the base64 fingerprint data to the Python process via stdin
         pythonProcess.stdin.write(fingerprintBase64);
         pythonProcess.stdin.end();
- 
+
         let dataBuffer = '';
+        let errorBuffer = '';
 
         // Listen for data output (the descriptors) from the Python script
-        pythonProcess.stdout.on('data', async (data) => {
-            // Concatenate data as it's being streamed
+        pythonProcess.stdout.on('data', (data) => {
             dataBuffer += data.toString();
         });
-        
-            // Once the stream ends, process the data
-            pythonProcess.stdout.on('end', async () => {
-                try {
-                    // Parse the accumulated buffer as JSON
-                    const descriptors = JSON.parse(dataBuffer);
-                    console.log(descriptors);
-        
-                    // Prepare data to insert into MongoDB
-                    const sampleData = {
-                        firstName: req.body.firstName,
-                        lastName: req.body.lastName,
-                        middleName: req.body.middleName,
-                        profilePhoto: profilePhotoBuffer, // Store image as Buffer
-                        fingerprintDescriptors: descriptors, // Store only descriptors instead of fingerprint image
-                        uploadedAt: new Date(),
-                    };
-        
-                    // Connect to MongoDB and insert the data
-                    await client.connect();
-                    const database = client.db('designsbyese');
-                    const collection = database.collection('samples');
-        
-                    // Insert data into MongoDB
-                    const result = await collection.insertOne(sampleData);
-                    console.log('Sample data stored:', result);
-        
-                    // Send success response with the inserted ID
-                    res.status(200).json({ message: 'Sample uploaded successfully', id: result.insertedId });
-                } catch (e) {
-                    // Handle errors (e.g., JSON parse errors)
-                    console.error('Error parsing JSON:', e);
-                    res.status(500).json({ message: 'Error processing fingerprint descriptors' });
-                }
-            });
-     
-        
-        // Handle errors from the Python process
+
+        // Capture any error messages from stderr
         pythonProcess.stderr.on('data', (error) => {
-            console.error('Error in descriptor extraction:', error.toString());
-            res.status(500).json({ message: 'Error in processing fingerprint' });
+            errorBuffer += error.toString();
         });
 
+        // Once the stream ends, decide what to do based on the data received
+        pythonProcess.on('close', async (code) => {
+            if (errorBuffer) {
+                // If there is any error in stderr, return the error and skip the database insertion
+                console.error('Error in descriptor extraction:', errorBuffer);
+                return res.status(500).json({ message: 'Error in processing fingerprint', details: errorBuffer });
+            }
+
+            try {
+                // Parse the accumulated buffer as JSON
+                const descriptors = JSON.parse(dataBuffer);
+                console.log(descriptors);
+
+                // Only insert into MongoDB if there are no errors
+                const sampleData = {
+                    firstName: req.body.firstName,
+                    lastName: req.body.lastName,
+                    middleName: req.body.middleName,
+                    profilePhoto: profilePhotoBuffer, // Store image as Buffer
+                    fingerprintDescriptors: descriptors, // Store only descriptors instead of fingerprint image
+                    uploadedAt: new Date(),
+                };
+
+                // Connect to MongoDB and insert the data
+                await client.connect();
+                const database = client.db('designsbyese');
+                const collection = database.collection('samples');
+
+                // Insert data into MongoDB
+                const result = await collection.insertOne(sampleData);
+                console.log('Sample data stored:', result);
+
+                // Send success response with the inserted ID
+                res.status(200).json({ message: 'Sample uploaded successfully', id: result.insertedId });
+            } catch (e) {
+                console.error('Error parsing JSON or inserting data:', e);
+                res.status(500).json({ message: 'Error processing fingerprint descriptors' });
+            } finally {
+                await client.close();
+            }
+        });
     } catch (error) {
         console.error('Error uploading sample:', error);
         res.status(500).json({ message: 'Error uploading sample', error: error.message });
-    } finally {
-        // Close the MongoDB connection
-        await client.close();
     }
 });
+
+
 
 // Function to check if a base64 string is valid
 function isValidBase64(str) {
@@ -175,6 +178,7 @@ app.post('/validatefingerprint', async (req, res) => {
 
         // Collect all stored fingerprint descriptors from the database
         const storedDescriptors = fingerprints.map(fp => fp.fingerprintDescriptors);
+        // console.log(storedDescriptors)
 
         // Write descriptors to a temporary file
         const descriptorsFilePath = path.join(tempDir, 'descriptors.json');
@@ -202,7 +206,7 @@ app.post('/validatefingerprint', async (req, res) => {
                 const matchThreshold = 70;
 
                 // Handle the case when no match is found or the match percentage is below the threshold
-                if (result.matchIndex === -1 || result.matchPercentage < matchThreshold) {
+                if (result.matchIndex === -1 || result.matchPercentage === null || result.matchPercentage < 70) {
                     return res.status(404).json({
                         message: 'No fingerprint match found.',
                     });
@@ -228,7 +232,10 @@ app.post('/validatefingerprint', async (req, res) => {
 
         pythonProcess.stderr.on('data', (data) => {
             console.error(`Python error: ${data}`);
-            return res.status(500).json({ message: 'Error during fingerprint validation.' });
+            // Instead of returning a 500 status, treat as no match (Fingerprint mismatch)
+            return res.status(404).json({
+                message: 'No fingerprint match found.',
+            });
         });
 
     } catch (error) {

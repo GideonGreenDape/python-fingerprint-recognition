@@ -74,20 +74,17 @@ def compare_fingerprints(des1, des2):
 
 if __name__ == '__main__':
     uploaded_image_path = sys.argv[1]
-    descriptors_file_path = sys.argv[2]
+    descriptors_file_path = sys.argv[2]  # Read descriptors from the file
 
     try:
-        # Load stored descriptors from file
-        with open(descriptors_file_path, 'r') as f:
-            stored_descriptors = json.load(f)
-
         # Load and get descriptors for the uploaded fingerprint image
         uploaded_fingerprint = cv2.imread(uploaded_image_path, cv2.IMREAD_GRAYSCALE)
         if uploaded_fingerprint is None:
             raise ValueError(f"Could not load image from path: {uploaded_image_path}")
 
         kp1, des1 = get_descriptors(uploaded_fingerprint)
-
+        # Log des1 to the terminal
+       
         if des1 is None:
             raise ValueError("No descriptors found in uploaded fingerprint image.")
 
@@ -95,37 +92,58 @@ if __name__ == '__main__':
         best_score = float('inf')
         match_percentage = 0
 
+        # Load stored descriptors from the file
+        with open(descriptors_file_path, 'r') as f:
+            stored_descriptors = json.load(f)
+
+        # Check if there are any stored descriptors to compare against
+        if not stored_descriptors:
+            raise ValueError("No stored descriptors found for comparison.")
+
         # Loop through each stored fingerprint descriptor
         for idx, stored_des in enumerate(stored_descriptors):
             try:
+                # Check if stored descriptor is valid
+                if stored_des is None or len(stored_des) == 0:
+                    continue  # Skip invalid descriptors
+
                 # Convert stored descriptors from list to numpy array (if necessary)
                 stored_des = np.array(stored_des, dtype=np.uint8)
 
+
+
                 # Compare descriptors if both are valid
-                if stored_des is not None:
-                    score, matches = compare_fingerprints(des1, stored_des)
-                    
-                    # Determine best match based on score (lower score is better)
-                    if score < best_score:
-                        best_score = score
-                        best_match = idx
-                        # Adjust match percentage to be more meaningful
-                    match_percentage = max(0, min((1 - best_score / 40), 1)) * 100  # Scale match percentage
+                score, matches = compare_fingerprints(des1, stored_des)
+
+                # Determine best match based on score (lower score is better)
+                if score < best_score:
+                    best_score = score
+                    best_match = idx
+                    # Adjust match percentage to be more meaningful
+                match_percentage = max(0, min((1 - best_score / 40), 1)) * 100  # Scale match percentage
 
             except Exception as e:
                 print(f"Error processing stored descriptors at index {idx}: {str(e)}", file=sys.stderr)
 
         # Result indicating best match index and match percentage
-        result = {
-            "matchIndex": best_match,
-            "matchPercentage": match_percentage if best_match != -1 else None
-        }
+        if best_match == -1 or match_percentage < 70:  # Adjust threshold as needed
+            result = {
+                "matchIndex": -1,
+                "matchPercentage": None  # Return None when no match is found
+            }
+        else:
+            result = {
+                "matchIndex": best_match,
+                "matchPercentage": match_percentage
+            }
 
         # Output result to stdout
         print(json.dumps(result))
 
     except Exception as e:
-        error_result = {
-            "error": str(e)
-        }
-        print(json.dumps(error_result))
+            # Instead of raising an error, treat as no match (Fingerprint mismatch)
+            result = {
+                "matchIndex": -1,
+                "matchPercentage": None  # Return None when an error occurs
+            }
+            print(json.dumps(result))

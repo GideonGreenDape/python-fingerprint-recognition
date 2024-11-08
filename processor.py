@@ -52,16 +52,31 @@ def get_descriptors(img):
     return des
 
 if __name__ == '__main__':
-    # Read base64-encoded image data from stdin
-    img_data_base64 = sys.stdin.read()
+    try:
+        # Read base64-encoded image data from stdin
+        img_data_base64 = sys.stdin.read()
 
-    # Decode base64 image data
-    img_data = base64.b64decode(img_data_base64)
-    img_array = np.frombuffer(img_data, np.uint8)
-    img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
+        if not img_data_base64:
+            raise ValueError("No input data received.")
 
-    # Process image to get descriptors
-    des = get_descriptors(img)
-    
-    # Output the descriptors as JSON
-    print(json.dumps(des.tolist() if des is not None else None))
+        # Decode base64 image data
+        img_data = base64.b64decode(img_data_base64)
+        img_array = np.frombuffer(img_data, np.uint8)
+
+        # Decode the image
+        img = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            raise ValueError("Failed to decode the image. It may be corrupted or invalid.")
+
+        # Process image to get descriptors
+        des = get_descriptors(img)
+
+        # Output the descriptors as JSON
+        print(json.dumps(des.tolist() if des is not None else None))
+
+    except Exception as e:
+        # Send the custom message for errors
+        error_result = {
+            "error": "Please enroll a human fingerprint."
+        }
+        print(json.dumps(error_result))
